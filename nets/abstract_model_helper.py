@@ -19,131 +19,132 @@
 from abc import ABC
 from abc import abstractmethod
 
+
 class AbstractModelHelper(ABC):
-  """Abstract class for model helpers.
+    """Abstract class for model helpers.
 
-  A model helper should define the following function interface:
-    1. Data input pipeline for training and evaluation subsets.
-    2. Network's forward pass during training and evaluation.
-    3. Loss function (and some extra evaluation metrics).
+    A model helper should define the following function interface:
+      1. Data input pipeline for training and evaluation subsets.
+      2. Network's forward pass during training and evaluation.
+      3. Loss function (and some extra evaluation metrics).
 
-  All functions marked with "@abstractmethod" must be explicitly implemented in the sub-class.
-  """
-
-  def __init__(self, data_format, forward_w_labels=False):
-    """Constructor function.
-
-    Note: DO NOT create any TF operations here!!!
-
-    Args:
-    * data_format: data format ('channels_last' OR 'channels_first')
+    All functions marked with "@abstractmethod" must be explicitly implemented in the sub-class.
     """
 
-    self.data_format = data_format
-    self.forward_w_labels = forward_w_labels
+    def __init__(self, data_format, forward_w_labels=False):
+        """Constructor function.
 
-  @abstractmethod
-  def build_dataset_train(self, enbl_trn_val_split):
-    """Build the data subset for training, usually with data augmentation.
+        Note: DO NOT create any TF operations here!!!
 
-    Args:
-    * enbl_trn_val_split: enable the training & validation splitting
+        Args:
+        * data_format: data format ('channels_last' OR 'channels_first')
+        """
 
-    Returns:
-    * iterator_trn: iterator for the training subset
-    * iterator_val: iterator for the validation subset
-      OR
-    * iterator: iterator for the training subset
-    """
-    pass
+        self.data_format = data_format
+        self.forward_w_labels = forward_w_labels
 
-  @abstractmethod
-  def build_dataset_eval(self):
-    """Build the data subset for evaluation, usually without data augmentation.
+    @abstractmethod
+    def build_dataset_train(self, enbl_trn_val_split):
+        """Build the data subset for training, usually with data augmentation.
 
-    Returns:
-    * iterator: iterator over the evaluation subset
-    """
-    pass
+        Args:
+        * enbl_trn_val_split: enable the training & validation splitting
 
-  @abstractmethod
-  def forward_train(self, inputs, labels=None):
-    """Forward computation at training.
+        Returns:
+        * iterator_trn: iterator for the training subset
+        * iterator_val: iterator for the validation subset
+          OR
+        * iterator: iterator for the training subset
+        """
+        pass
 
-    Args:
-    * inputs: inputs to the network's forward pass
-    * labels: ground-truth labels
+    @abstractmethod
+    def build_dataset_eval(self):
+        """Build the data subset for evaluation, usually without data augmentation.
 
-    Returns:
-    * outputs: outputs from the network's forward pass
-    """
-    pass
+        Returns:
+        * iterator: iterator over the evaluation subset
+        """
+        pass
 
-  @abstractmethod
-  def forward_eval(self, inputs):
-    """Forward computation at evaluation.
+    @abstractmethod
+    def forward_train(self, inputs, labels=None):
+        """Forward computation at training.
 
-    Args:
-    * inputs: inputs to the network's forward pass
+        Args:
+        * inputs: inputs to the network's forward pass
+        * labels: ground-truth labels
 
-    Returns:
-    * outputs: outputs from the network's forward pass
-    """
-    pass
+        Returns:
+        * outputs: outputs from the network's forward pass
+        """
+        pass
 
-  @abstractmethod
-  def calc_loss(self, labels, outputs, trainable_vars):
-    """Calculate loss (and some extra evaluation metrics).
+    @abstractmethod
+    def forward_eval(self, inputs):
+        """Forward computation at evaluation.
 
-    Args:
-    * labels: ground-truth labels
-    * outputs: outputs from the network's forward pass
-    * trainable_vars: list of trainable variables
+        Args:
+        * inputs: inputs to the network's forward pass
 
-    Returns:
-    * loss: loss function's value
-    * metrics: dictionary of extra evaluation metrics
-    """
-    pass
+        Returns:
+        * outputs: outputs from the network's forward pass
+        """
+        pass
 
-  @abstractmethod
-  def setup_lrn_rate(self, global_step):
-    """Setup the learning rate (and number of training iterations).
+    @abstractmethod
+    def calc_loss(self, labels, outputs, trainable_vars):
+        """Calculate loss (and some extra evaluation metrics).
 
-    Args:
-    * global_step: training iteration counter
+        Args:
+        * labels: ground-truth labels
+        * outputs: outputs from the network's forward pass
+        * trainable_vars: list of trainable variables
 
-    Returns:
-    * lrn_rate: learning rate
-    * nb_iters: number of training iterations
-    """
-    pass
+        Returns:
+        * loss: loss function's value
+        * metrics: dictionary of extra evaluation metrics
+        """
+        pass
 
-  def warm_start(self, sess):
-    """Initialize the model for warm-start.
+    @abstractmethod
+    def setup_lrn_rate(self, global_step):
+        """Setup the learning rate (and number of training iterations).
 
-    Args:
-    * sess: TensorFlow session
-    """
-    pass
+        Args:
+        * global_step: training iteration counter
 
-  def dump_n_eval(self, outputs, action):
-    """Dump the model's outputs to files and evaluate.
+        Returns:
+        * lrn_rate: learning rate
+        * nb_iters: number of training iterations
+        """
+        pass
 
-    Args:
-    * outputs: outputs from the network's forward pass
-    * action: 'init' | 'dump' | 'eval'
-    """
-    pass
+    def warm_start(self, sess):
+        """Initialize the model for warm-start.
 
-  @property
-  @abstractmethod
-  def model_name(self):
-    """Model's name."""
-    pass
+        Args:
+        * sess: TensorFlow session
+        """
+        pass
 
-  @property
-  @abstractmethod
-  def dataset_name(self):
-    """Dataset's name."""
-    pass
+    def dump_n_eval(self, outputs, action):
+        """Dump the model's outputs to files and evaluate.
+
+        Args:
+        * outputs: outputs from the network's forward pass
+        * action: 'init' | 'dump' | 'eval'
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def model_name(self):
+        """Model's name."""
+        pass
+
+    @property
+    @abstractmethod
+    def dataset_name(self):
+        """Dataset's name."""
+        pass

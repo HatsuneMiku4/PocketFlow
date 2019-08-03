@@ -17,6 +17,7 @@
 """Abstract class for datasets."""
 
 from abc import ABC
+
 import tensorflow as tf
 
 from utils.multi_gpu_wrapper import MultiGpuWrapper as mgw
@@ -32,80 +33,81 @@ tf.app.flags.DEFINE_integer('nb_threads', 8, '# of threads for preprocessing the
 tf.app.flags.DEFINE_integer('buffer_size', 1024, '# of elements to be buffered when prefetching')
 tf.app.flags.DEFINE_integer('prefetch_size', 8, '# of mini-batches to be buffered when prefetching')
 
+
 class AbstractDataset(ABC):
-  '''Abstract class for datasets.'''
+    """Abstract class for datasets."""
 
-  def __init__(self, is_train):
-    """Constructor function.
+    def __init__(self, is_train):
+        """Constructor function.
 
-    Args:
-    * is_train: whether to construct the training subset
-    """
+        Args:
+        * is_train: whether to construct the training subset
+        """
 
-    # following attributes must be initialized by each sub-class
-    self.file_pattern = None
-    self.dataset_fn = None
-    self.parse_fn = None
-    self.batch_size = None
+        # following attributes must be initialized by each sub-class
+        self.file_pattern = None
+        self.dataset_fn = None
+        self.parse_fn = None
+        self.batch_size = None
 
-    # determine whether data sharding is enabled
-    self.is_train = is_train
-    self.enbl_shard = (is_train and FLAGS.enbl_multi_gpu)  # shard files for multi-GPU training
+        # determine whether data sharding is enabled
+        self.is_train = is_train
+        self.enbl_shard = (is_train and FLAGS.enbl_multi_gpu)  # shard files for multi-GPU training
 
-  def build(self, enbl_trn_val_split=False):
-    '''Build iterator(s) for tf.data.Dataset() object.
+    def build(self, enbl_trn_val_split=False):
+        """Build iterator(s) for tf.data.Dataset() object.
 
-    Args:
-    * enbl_trn_val_split: whether to split into training & validation subsets
+        Args:
+        * enbl_trn_val_split: whether to split into training & validation subsets
 
-    Returns:
-    * iterator_trn: iterator for the training subset
-    * iterator_val: iterator for the validation subset
-      OR
-    * iterator: iterator for the chosen subset (training OR testing)
-
-    Example:
-      # build iterator(s)
-      dataset = xxxxDataset(is_train=True)  # TF operations are not created
-      iterator = dataset.build()            # TF operations are created
+        Returns:
+        * iterator_trn: iterator for the training subset
+        * iterator_val: iterator for the validation subset
           OR
-      iterator_trn, iterator_val = dataset.build(enbl_trn_val_split=True)  # for dataset-train only
+        * iterator: iterator for the chosen subset (training OR testing)
 
-      # use the iterator to obtain a mini-batch of images & labels
-      images, labels = iterator.get_next()
-    '''
+        Example:
+          # build iterator(s)
+          dataset = xxxxDataset(is_train=True)  # TF operations are not created
+          iterator = dataset.build()            # TF operations are created
+              OR
+          iterator_trn, iterator_val = dataset.build(enbl_trn_val_split=True)  # for dataset-train only
 
-    # obtain list of data files' names
-    filenames = tf.data.Dataset.list_files(self.file_pattern, shuffle=True)
-    if self.enbl_shard:
-      filenames = filenames.shard(mgw.size(), mgw.rank())
+          # use the iterator to obtain a mini-batch of images & labels
+          images, labels = iterator.get_next()
+        """
 
-    # create a tf.data.Dataset from list of files
-    dataset = filenames.apply(
-      tf.contrib.data.parallel_interleave(self.dataset_fn, cycle_length=FLAGS.cycle_length))
-    dataset = dataset.map(self.parse_fn, num_parallel_calls=FLAGS.nb_threads)
+        # obtain list of data files' names
+        filenames = tf.data.Dataset.list_files(self.file_pattern, shuffle=True)
+        if self.enbl_shard:
+            filenames = filenames.shard(mgw.size(), mgw.rank())
 
-    # create iterators for training & validation subsets separately
-    if self.is_train and enbl_trn_val_split:
-      iterator_val = self.__make_iterator(dataset.take(FLAGS.nb_smpls_val))
-      iterator_trn = self.__make_iterator(dataset.skip(FLAGS.nb_smpls_val))
-      return iterator_trn, iterator_val
+        # create a tf.data.Dataset from list of files
+        dataset = filenames.apply(
+            tf.contrib.data.parallel_interleave(self.dataset_fn, cycle_length=FLAGS.cycle_length))
+        dataset = dataset.map(self.parse_fn, num_parallel_calls=FLAGS.nb_threads)
 
-    return self.__make_iterator(dataset)
+        # create iterators for training & validation subsets separately
+        if self.is_train and enbl_trn_val_split:
+            iterator_val = self.__make_iterator(dataset.take(FLAGS.nb_smpls_val))
+            iterator_trn = self.__make_iterator(dataset.skip(FLAGS.nb_smpls_val))
+            return iterator_trn, iterator_val
 
-  def __make_iterator(self, dataset):
-    """Make an iterator from tf.data.Dataset.
+        return self.__make_iterator(dataset)
 
-    Args:
-    * dataset: tf.data.Dataset object
+    def __make_iterator(self, dataset):
+        """Make an iterator from tf.data.Dataset.
 
-    Returns:
-    * iterator: iterator for the dataset
-    """
+        Args:
+        * dataset: tf.data.Dataset object
 
-    dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=FLAGS.buffer_size))
-    dataset = dataset.batch(self.batch_size)
-    dataset = dataset.prefetch(FLAGS.prefetch_size)
-    iterator = dataset.make_one_shot_iterator()
+        Returns:
+        * iterator: iterator for the dataset
+        """
 
-    return iterator
+        dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=FLAGS.buffer_size))
+        dataset = dataset.batch(self.batch_size)
+        dataset = dataset.prefetch(FLAGS.prefetch_size)
+        iterator = dataset.make_one_shot_iterator()
+
+        return iterator

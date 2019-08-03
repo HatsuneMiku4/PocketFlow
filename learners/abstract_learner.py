@@ -16,11 +16,12 @@
 # ==============================================================================
 """Abstract class for learners."""
 
-from abc import ABC
-from abc import abstractmethod
 import os
 import shutil
 import subprocess
+from abc import ABC
+from abc import abstractmethod
+
 import tensorflow as tf
 
 from utils.misc_utils import auto_barrier as auto_barrier_impl
@@ -30,129 +31,129 @@ from utils.multi_gpu_wrapper import MultiGpuWrapper as mgw
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('model_http_url', None, 'HTTP/HTTPS url for remote model files')
-tf.app.flags.DEFINE_integer('summ_step', 100, 'summarizaton step size')
+tf.app.flags.DEFINE_integer('summ_step', 100, 'summary step size')
 tf.app.flags.DEFINE_integer('save_step', 10000, 'model saving step size')
 tf.app.flags.DEFINE_string('save_path', './models/model.ckpt', 'model\'s save path')
-tf.app.flags.DEFINE_string('save_path_eval', './models_eval/model.ckpt',
-                           'model\'s save path for evaluation')
+tf.app.flags.DEFINE_string('save_path_eval', './models_eval/model.ckpt', 'model\'s save path for evaluation')
 tf.app.flags.DEFINE_boolean('enbl_dst', False, 'enable the distillation loss for training')
 tf.app.flags.DEFINE_boolean('enbl_warm_start', False, 'enable warm start for training')
 
+
 class AbstractLearner(ABC):  # pylint: disable=too-many-instance-attributes
-  """Abstract class for learners.
+    """Abstract class for learners.
 
-  A learner should take a ModelHelper object as input, which includes the data input pipeline and
-    model definition, and perform either training or evaluation with its specific algorithm.
-  The execution mode is specified by the <is_train> argument:
-    * If <is_train> is True, then the learner will train a model with specified data & network
-      architecture. The model will be saved to local files periodically.
-    * If <is_train> is False, then the learner will restore a model from local files and
-      measure its performance on the evaluation subset.
+    A learner should take a ModelHelper object as input, which includes the data input pipeline and
+      model definition, and perform either training or evaluation with its specific algorithm.
+    The execution mode is specified by the <is_train> argument:
+      * If <is_train> is True, then the learner will train a model with specified data & network
+        architecture. The model will be saved to local files periodically.
+      * If <is_train> is False, then the learner will restore a model from local files and
+        measure its performance on the evaluation subset.
 
-  All functions marked with "@abstractmethod" must be explicitly implemented in the sub-class.
-  """
-
-  def __init__(self, sm_writer, model_helper):
-    """Constructor function.
-
-    Args:
-    * sm_writer: TensorFlow's summary writer
-    * model_helper: model helper with definitions of model & dataset
+    All functions marked with "@abstractmethod" must be explicitly implemented in the sub-class.
     """
 
-    # initialize attributes
-    self.sm_writer = sm_writer
-    self.data_scope = 'data'
-    self.model_scope = 'model'
+    def __init__(self, sm_writer, model_helper):
+        """Constructor function.
 
-    # initialize Horovod / TF-Plus for multi-gpu training
-    if FLAGS.enbl_multi_gpu:
-      mgw.init()
-      from mpi4py import MPI
-      self.mpi_comm = MPI.COMM_WORLD
-    else:
-      self.mpi_comm = None
+        Args:
+        * sm_writer: TensorFlow's summary writer
+        * model_helper: model helper with definitions of model & dataset
+        """
 
-    # obtain the function interface provided by the model helper
-    self.build_dataset_train = model_helper.build_dataset_train
-    self.build_dataset_eval = model_helper.build_dataset_eval
-    self.forward_train = model_helper.forward_train
-    self.forward_eval = model_helper.forward_eval
-    self.calc_loss = model_helper.calc_loss
-    self.setup_lrn_rate = model_helper.setup_lrn_rate
-    self.warm_start = model_helper.warm_start
-    self.dump_n_eval = model_helper.dump_n_eval
-    self.model_name = model_helper.model_name
-    self.dataset_name = model_helper.dataset_name
-    self.forward_w_labels = model_helper.forward_w_labels
+        # initialize attributes
+        self.sm_writer = sm_writer
+        self.data_scope = 'data'
+        self.model_scope = 'model'
 
-    # checkpoint path determined by model's & dataset's names
-    self.ckpt_file = 'models_%s_at_%s.tar.gz' % (self.model_name, self.dataset_name)
+        # initialize Horovod / TF-Plus for multi-gpu training
+        if FLAGS.enbl_multi_gpu:
+            mgw.init()
+            from mpi4py import MPI
+            self.mpi_comm = MPI.COMM_WORLD
+        else:
+            self.mpi_comm = None
 
-  @abstractmethod
-  def train(self):
-    """Train a model and periodically produce checkpoint files.
+        # obtain the function interface provided by the model helper
+        self.build_dataset_train = model_helper.build_dataset_train
+        self.build_dataset_eval = model_helper.build_dataset_eval
+        self.forward_train = model_helper.forward_train
+        self.forward_eval = model_helper.forward_eval
+        self.calc_loss = model_helper.calc_loss
+        self.setup_lrn_rate = model_helper.setup_lrn_rate
+        self.warm_start = model_helper.warm_start
+        self.dump_n_eval = model_helper.dump_n_eval
+        self.model_name = model_helper.model_name
+        self.dataset_name = model_helper.dataset_name
+        self.forward_w_labels = model_helper.forward_w_labels
 
-    Model parameters should be saved periodically for future evaluation.
-    """
-    pass
+        # checkpoint path determined by model's & dataset's names
+        self.ckpt_file = 'models_%s_at_%s.tar.gz' % (self.model_name, self.dataset_name)
 
-  @abstractmethod
-  def evaluate(self):
-    """Restore a model from the latest checkpoint files and then evaluate it."""
-    pass
+    @abstractmethod
+    def train(self):
+        """Train a model and periodically produce checkpoint files.
 
-  def download_model(self):
-    """Download remote model files and then uncompress.
+        Model parameters should be saved periodically for future evaluation.
+        """
+        pass
 
-    Note: All files in FLAGS.save_path will be removed and replaced by the pre-trained model.
-    """
+    @abstractmethod
+    def evaluate(self):
+        """Restore a model from the latest checkpoint files and then evaluate it."""
+        pass
 
-    # early return if local model files exist
-    if tf.train.latest_checkpoint(os.path.dirname(FLAGS.save_path)) is not None:
-      return
+    def download_model(self):
+        """Download remote model files and then uncompress.
 
-    # download remote model files
-    if FLAGS.model_http_url is None:
-      raise ValueError('local model files do not exist and <model_http_url> is not set')
-    subprocess.call(['wget', os.path.join(FLAGS.model_http_url, self.ckpt_file)])
-    if os.path.exists(self.ckpt_file):
-      if os.path.isdir(os.path.dirname(FLAGS.save_path)):
-        shutil.rmtree(os.path.dirname(FLAGS.save_path))
-      subprocess.call(['tar', '-xvf', self.ckpt_file])
-    else:
-      raise FileNotFoundError(
-        'pre-trained model not avaialable: {} / {}'.format(self.model_name, self.dataset_name))
+        Note: All files in FLAGS.save_path will be removed and replaced by the pre-trained model.
+        """
 
-  def auto_barrier(self):
-    """Automatically insert a barrier for multi-GPU training, or pass for single-GPU training."""
+        # early return if local model files exist
+        if tf.train.latest_checkpoint(os.path.dirname(FLAGS.save_path)) is not None:
+            return
 
-    auto_barrier_impl(self.mpi_comm)
+        # download remote model files
+        if FLAGS.model_http_url is None:
+            raise ValueError('local model files do not exist and <model_http_url> is not set')
+        subprocess.call(['wget', os.path.join(FLAGS.model_http_url, self.ckpt_file)])
+        if os.path.exists(self.ckpt_file):
+            if os.path.isdir(os.path.dirname(FLAGS.save_path)):
+                shutil.rmtree(os.path.dirname(FLAGS.save_path))
+            subprocess.call(['tar', '-xvf', self.ckpt_file])
+        else:
+            raise FileNotFoundError(
+                'pre-trained model not available: {} / {}'.format(self.model_name, self.dataset_name))
 
-  @classmethod
-  def is_primary_worker(cls, scope='global'):
-    """Check whether is the primary worker of all nodes (global) or the current node (local).
+    def auto_barrier(self):
+        """Automatically insert a barrier for multi-GPU training, or pass for single-GPU training."""
 
-    Args:
-    * scope: check scope ('global' OR 'local')
+        auto_barrier_impl(self.mpi_comm)
 
-    Returns:
-    * flag: whether is the primary worker
-    """
+    @classmethod
+    def is_primary_worker(cls, scope='global'):
+        """Check whether is the primary worker of all nodes (global) or the current node (local).
 
-    return is_primary_worker_impl(scope)
+        Args:
+        * scope: check scope ('global' OR 'local')
 
-  @property
-  def vars(self):
-    """List of all global variables."""
-    return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.model_scope)
+        Returns:
+        * flag: whether is the primary worker
+        """
 
-  @property
-  def trainable_vars(self):
-    """List of all trainable variables."""
-    return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.model_scope)
+        return is_primary_worker_impl(scope)
 
-  @property
-  def update_ops(self):
-    """List of all update operations."""
-    return tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope=self.model_scope)
+    @property
+    def vars(self):
+        """List of all global variables."""
+        return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.model_scope)
+
+    @property
+    def trainable_vars(self):
+        """List of all trainable variables."""
+        return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.model_scope)
+
+    @property
+    def update_ops(self):
+        """List of all update operations."""
+        return tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope=self.model_scope)

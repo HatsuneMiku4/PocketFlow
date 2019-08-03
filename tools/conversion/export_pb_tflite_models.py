@@ -29,7 +29,7 @@ import traceback
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib import graph_editor
-from tensorflow.contrib.lite.python import lite_constants
+from tensorflow.lite.python import lite_constants
 
 FLAGS = tf.app.flags.FLAGS
 

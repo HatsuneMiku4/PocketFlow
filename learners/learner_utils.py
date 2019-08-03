@@ -18,49 +18,50 @@
 
 import tensorflow as tf
 
-from learners.full_precision.learner import FullPrecLearner
-from learners.weight_sparsification.learner import WeightSparseLearner
 from learners.channel_pruning.learner import ChannelPrunedLearner
 from learners.channel_pruning_gpu.learner import ChannelPrunedGpuLearner
 from learners.channel_pruning_rmt.learner import ChannelPrunedRmtLearner
 from learners.discr_channel_pruning.learner import DisChnPrunedLearner
+from learners.full_precision.learner import FullPrecLearner
+from learners.nonuniform_quantization.learner import NonUniformQuantLearner
 from learners.uniform_quantization.learner import UniformQuantLearner
 from learners.uniform_quantization_tf.learner import UniformQuantTFLearner
-from learners.nonuniform_quantization.learner import NonUniformQuantLearner
+from learners.weight_sparsification.learner import WeightSparseLearner
 
 FLAGS = tf.app.flags.FLAGS
 
+
 def create_learner(sm_writer, model_helper):
-  """Create the learner as specified by FLAGS.learner.
+    """Create the learner as specified by FLAGS.learner.
 
-  Args:
-  * sm_writer: TensorFlow's summary writer
-  * model_helper: model helper with definitions of model & dataset
+    Args:
+    * sm_writer: TensorFlow's summary writer
+    * model_helper: model helper with definitions of model & dataset
 
-  Returns:
-  * learner: the specified learner
-  """
+    Returns:
+    * learner: the specified learner
+    """
 
-  learner = None
-  if FLAGS.learner == 'full-prec':
-    learner = FullPrecLearner(sm_writer, model_helper)
-  elif FLAGS.learner == 'weight-sparse':
-    learner = WeightSparseLearner(sm_writer, model_helper)
-  elif FLAGS.learner == 'channel':
-    learner = ChannelPrunedLearner(sm_writer, model_helper)
-  elif FLAGS.learner == 'chn-pruned-gpu':
-    learner = ChannelPrunedGpuLearner(sm_writer, model_helper)
-  elif FLAGS.learner == 'chn-pruned-rmt':
-    learner = ChannelPrunedRmtLearner(sm_writer, model_helper)
-  elif FLAGS.learner == 'dis-chn-pruned':
-    learner = DisChnPrunedLearner(sm_writer, model_helper)
-  elif FLAGS.learner == 'uniform':
-    learner = UniformQuantLearner(sm_writer, model_helper)
-  elif FLAGS.learner == 'uniform-tf':
-    learner = UniformQuantTFLearner(sm_writer, model_helper)
-  elif FLAGS.learner == 'non-uniform':
-    learner = NonUniformQuantLearner(sm_writer, model_helper)
-  else:
-    raise ValueError('unrecognized learner\'s name: ' + FLAGS.learner)
+    learner = None
+    if FLAGS.learner == 'full-prec':
+        learner = FullPrecLearner(sm_writer, model_helper)
+    elif FLAGS.learner == 'weight-sparse':
+        learner = WeightSparseLearner(sm_writer, model_helper)
+    elif FLAGS.learner == 'channel':
+        learner = ChannelPrunedLearner(sm_writer, model_helper)
+    elif FLAGS.learner == 'chn-pruned-gpu':
+        learner = ChannelPrunedGpuLearner(sm_writer, model_helper)
+    elif FLAGS.learner == 'chn-pruned-rmt':
+        learner = ChannelPrunedRmtLearner(sm_writer, model_helper)
+    elif FLAGS.learner == 'dis-chn-pruned':
+        learner = DisChnPrunedLearner(sm_writer, model_helper)
+    elif FLAGS.learner == 'uniform':
+        learner = UniformQuantLearner(sm_writer, model_helper)
+    elif FLAGS.learner == 'uniform-tf':
+        learner = UniformQuantTFLearner(sm_writer, model_helper)
+    elif FLAGS.learner == 'non-uniform':
+        learner = NonUniformQuantLearner(sm_writer, model_helper)
+    else:
+        raise ValueError('unrecognized learner\'s name: ' + FLAGS.learner)
 
-  return learner
+    return learner
