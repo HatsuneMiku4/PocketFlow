@@ -29,7 +29,7 @@ from utils.multi_gpu_wrapper import MultiGpuWrapper as mgw
 FLAGS = tf.app.flags.FLAGS
 
 
-class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-attributes
+class FullPrecLearner(AbstractLearner):    # pylint: disable=too-many-instance-attributes
     """Full-precision learner (no model compression applied)."""
 
     def __init__(self, sm_writer, model_helper, model_scope=None, enbl_dst=None):
@@ -66,9 +66,12 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
             self.sess_train.run(self.bcast_op)
 
         if FLAGS.export_directly and self.is_primary_worker('global'):
+            self.__restore_model(is_train=True)
+            self.__save_model(is_train=True)
             self.__restore_model(is_train=False)
             self.__save_model(is_train=False)
             self.evaluate()
+            return
 
         # train the model through iterations and periodically save & evaluate the model
         time_prev = timer()
@@ -143,6 +146,7 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
                     logits = self.forward_train(images, labels)
                 else:
                     logits = self.forward_train(images) if is_train else self.forward_eval(images)
+
                 if not isinstance(logits, dict):
                     tf.add_to_collection('logits_final', logits)
                 else:
@@ -161,7 +165,8 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
                 if is_train:
                     self.global_step = tf.train.get_or_create_global_step()
                     lrn_rate, self.nb_iters_train = self.setup_lrn_rate(self.global_step)
-                    optimizer = tf.train.MomentumOptimizer(lrn_rate, FLAGS.momentum)
+                    optimizer = tf.train.AdamOptimizer(lrn_rate, epsilon=1e-8)
+                    # optimizer = tf.train.MomentumOptimizer(lrn_rate, FLAGS.momentum)
                     if FLAGS.enbl_multi_gpu:
                         optimizer = mgw.DistributedOptimizer(optimizer)
                     grads = optimizer.compute_gradients(loss, self.trainable_vars)
@@ -207,11 +212,37 @@ class FullPrecLearner(AbstractLearner):  # pylint: disable=too-many-instance-att
 
         save_path = tf.train.latest_checkpoint(os.path.dirname(FLAGS.save_path))
         if is_train:
-            self.saver_train.restore(self.sess_train, save_path)
+            if FLAGS.export_directly:
+                with self.sess_train.graph.as_default():
+                    saver_export = tf.train.Saver({
+                        v.op.name.replace('model/', ''): v for v in self.vars if 'Adam' not in v.op.name and v.op.name not in [
+                            'model/global_step', 'model/_CHECKPOINTABLE_OBJECT_GRAPH']})
+                    # saver_export = tf.train.Saver({
+                    #     v.op.name.replace('model/', ''): v for v in self.vars if v.op.name not in [
+                    #         'model/MobilenetV2/Conv_1/BatchNorm/beta/Adam',
+                    #         'model/MobilenetV2/Conv_1/BatchNorm/beta/Adam_1',
+                    #         'model/MobilenetV2/Conv_1/BatchNorm/gamma/Adam',
+                    #         'model/MobilenetV2/Conv_1/BatchNorm/gamma/Adam_1',
+                    #         'model/MobilenetV2/Conv_1/weights/Adam',
+                    #         'model/MobilenetV2/Conv_1/weights/Adam_1',
+                    #         'model/MobilenetV2/expanded_conv_13/depthwise/BatchNorm/beta/Adam',
+                    #         'model/MobilenetV2/expanded_conv_13/depthwise/BatchNorm/beta/Adam_1',
+                    #         'model/MobilenetV2/expanded_conv_13/depthwise/BatchNorm/gamma/Adam',
+                    #         'model/MobilenetV2/expanded_conv_13/depthwise/BatchNorm/gamma/Adam_1',
+                    #         'model/MobilenetV2/expanded_conv_13/depthwise/depthwise_weights/Adam',
+                    #         'model/MobilenetV2/expanded_conv_13/depthwise/depthwise_weights/Adam_1',
+                    #         'model/MobilenetV2/expanded_conv_13/expand/BatchNorm/beta/Adam',
+                    #         'model/MobilenetV2/expanded_conv_13/expand/BatchNorm/beta/Adam_1',
+                    #         'model/MobilenetV2/expanded_conv_13/expand/BatchNorm/gamma/Adam',
+                    #         'model/MobilenetV2/expanded_conv_13/expand/BatchNorm/gamma/Adam_1',
+                    #     ]})
+            else:
+                saver_export = self.saver_train
+            saver_export.restore(self.sess_train, save_path)
         else:
             if FLAGS.export_directly:
-                print(self.vars, list(map(lambda x: x.name, self.vars)))
-                saver_export = tf.train.Saver({v.name.replace('model/', ''): v for v in self.vars})
+                with self.sess_eval.graph.as_default():
+                    saver_export = tf.train.Saver({v.op.name.replace('model/', ''): v for v in self.vars})
             else:
                 saver_export = self.saver_eval
             saver_export.restore(self.sess_eval, save_path)
