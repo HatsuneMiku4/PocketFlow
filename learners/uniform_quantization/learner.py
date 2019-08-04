@@ -68,7 +68,7 @@ def setup_bnds_decay_rates(model_name, dataset_name):
         else:
             raise ValueError('Unsupported model name')
     elif dataset_name == 'coco2017-pose':
-        bnds = [nb_batches_per_epoch * 5, nb_batches_per_epoch * 30]
+        bnds = [nb_batches_per_epoch * 1, nb_batches_per_epoch * 5]
         decay_rates = [1e-4, 1e-5, 1e-6]
     else:
         raise ValueError('Unrecognized dataset name')
@@ -183,11 +183,11 @@ class UniformQuantLearner(AbstractLearner):
             bucket_storage = self.sess_eval.run(self.ops['bucket_storage'], feed_dict=feed_dict)
             self.__show_bucket_storage(bucket_storage)
 
-        if is_openpose:
-            from openpose_eval_helper import calculate_map
-            tensor_image = self.sess_eval.graph.get_tensor_by_name('model/image:0')
+        if is_openpose and FLAGS.calculate_map:
+            from examples.openpose_eval_helper import calculate_map
+            tensor_image = self.sess_eval.graph.get_tensor_by_name('model/MobilenetV2/input:0')
             tensor_output = self.sess_eval.graph.get_tensor_by_name('model/Openpose/concat_stage7:0')
-            calculate_map(lambda img: self.sess_eval.run([tensor_output], feed_dict={tensor_image: img})[0])
+            calculate_map(lambda img: self.sess_eval.run([tensor_output], feed_dict={tensor_image: img, **feed_dict})[0])
 
     def __build_train(self):
         with tf.Graph().as_default():

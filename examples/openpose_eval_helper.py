@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import slidingwindow as sw
 import tensorflow as tf
-from pycocotools import COCO
+from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from tf_pose import common
 from tf_pose.estimator import PoseEstimator
